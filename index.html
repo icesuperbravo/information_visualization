@@ -1,0 +1,302 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html;charset=utf-8">
+    <title>Line chart from CSV using d3.js</title>
+    <script type="text/javascript" src="https://d3js.org/d3.v5.min.js"></script>
+    <style>
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            width: 100%;
+        }
+
+        text {
+            font-family: arial;
+            font-size: 15px;
+        }
+
+        text.title {
+              font-family: arial;
+              font-size: 24px;
+          }
+
+        text.valueText {
+            font-family: arial;
+            font-size: 15px;
+            fill: rgb(31, 119, 180);
+        }
+
+        /* Style the lines by removing the fill and applying a stroke */
+        path.line {
+            fill: none;
+            /*stroke: #ff15ec;*/
+            stroke-width: 3px;
+        }
+
+        /*path.line2 {*/
+            /*fill: none;*/
+            /*!*stroke: #ffab00;*!*/
+            /*stroke-width: 3px;*/
+        /*}*/
+
+        /* Style the dots by assigning a fill and stroke */
+        circle.dot {
+            fill:   rgb(31, 119, 180);
+            stroke: rgb(31, 119, 180)
+        }
+
+        /*circle.dot2 {*/
+            /*fill: #ffab00;*/
+            /*stroke: #fff;*/
+        /*}*/
+
+        .axis path,
+        .axis line {
+            fill: none;
+            stroke: slategray;
+            shape-rendering: crispEdges;
+        }
+    </style>
+</head>
+<body>
+
+<script type="text/javascript">
+
+    var parseDate = d3.timeParse("%Y-%m-%d");
+
+    // 2. Use the margin convention practice
+    var margin = {top: 50, right: 50, bottom: 50, left: 50}
+        , width = window.innerWidth - margin.left - margin.right // Use the window's width
+        , height = window.innerHeight - margin.top - margin.bottom; // Use the window's height
+
+
+    var max = 0;
+    var dateForMaxVal=null;
+    var maxValIndex = null;
+
+    var xNudge = 50;
+    var yNudge = 20;
+
+    var minDate = new Date();
+    var maxDate = new Date();
+
+
+
+
+    d3.csv("BTCvsSP500.csv", function (d) {
+        return {
+            date: parseDate(d.date),
+            BTC: +d["BTC"],
+            SP500: +d["SP500"]
+        };
+    })
+        .then(function(rows) {
+            //parse data
+            var prices = rows.columns.slice(2).map(function(colName) {
+                return {
+                    colName: colName,
+                    values: rows.map(function(d) {
+                        return {date: d.date, closedPrices: d[colName]};
+                    })
+                };
+            });
+
+            console.log(prices);
+            //calculate the range value of x-axis and y-axis;
+
+            max = d3.max(prices, function(d) { return d3.max(d.values, function(v) { return v.closedPrices; });  });
+            minDate = d3.min(prices, function(d) { return d3.min(d.values, function(v) { return v.date;}); });
+            maxDate = d3.max(prices, function(d) { return d3.max(d.values, function(v) { return v.date;}); });
+
+            console.log(max);
+            // console.log(minDate+"~"+maxDate);
+
+            //calculate the x and y scale
+            var y = d3.scaleLinear()
+                .domain([0,max])
+                .range([height,0]);
+
+            var x = d3.scaleTime()
+                .domain([minDate,maxDate])
+                .range([0,width]);
+
+            //Let the yAxis divide 1000;
+            var yAxis = d3.axisLeft(d3.scaleLinear()
+                .domain([0,max/1000])
+                .range([height,0]));
+
+            var xAxis = d3.axisBottom(x);
+
+            //calculate the reflection of line
+            var line = d3.line()
+                .x(function(d){ return x(d.date); })
+                .y(function(d, i){
+                    if(d.closedPrices===max) {maxValIndex=i;dateForMaxVal=d.date;}
+                    return y(d.closedPrices);
+                })
+                .curve(d3.curveCardinal);
+
+            var colorTable = [
+                 "rgb(255, 127, 14)", //"BTC"
+                 "rgb(44, 160, 44)"  //"SPF500"
+            ];
+
+            var svg = d3.select("body").append("svg").attr("id","svg").attr("height","100%").attr("width","100%");
+            var chartGroup = svg.append("g").attr("class","chartGroup").attr("transform","translate("+xNudge+","+yNudge+")");
+
+            //Draw the title
+            chartGroup
+                .append("text")
+                .attr("class", "title")
+                .text("Daily Closed Price of BTC V.S. SP500 over Time")
+                .attr("transform", 'translate(' + 20 + ',' + 20 +')' );
+
+            // Draw the line
+            chartGroup
+                .selectAll(".line")
+                .data(prices).enter()
+                .append("path")
+                .attr("class","line")
+                .attr("d",function(d){  return line(d.values); })
+                .style("stroke", function(d, i) { return colorTable[i]; });*
+
+            chartGroup
+                .append("line")
+                .attr("class","refLine")
+                .attr("x1", x(dateForMaxVal))
+                .attr("y1", y(0))
+                .attr("x2", x(dateForMaxVal))
+                .attr("y2", y(max))
+                .style("stroke",  "gray")
+                .style("stroke-dasharray", ("3, 3"))
+                .style("stroke-width", 1)
+                .style("fill", "none");
+
+
+
+
+            //Plot data points on lines
+            // var pointSeries= function(prices, colNo)
+            // {
+            //     var colValue = prices.slice(colNo, colNo+1);
+            //     console.log(colValue[0].values);
+            //     return colValue[0].values;
+            // };
+
+            //Draw Maximum Point on the line chart
+            var maxTipBTC = chartGroup
+                .append('g')
+                .attr('class', 'maxTipBTC');
+            maxTipBTC
+                .append("circle") // Uses the enter().append() method
+                .attr("class", "dot") // Assign a class for styling
+                .attr("cx", function() { return x(dateForMaxVal); })
+                .attr("cy", function(){ return y(max);})
+                .attr("r", 4);
+            maxTipBTC
+                .append("text")
+                .attr("class", "valueText")
+                .attr('text-anchor', 'start')
+                .attr("transform", "translate("+(x(dateForMaxVal)-120)+","+y(max)+")")
+                .attr('dy', '.32em')
+                .attr('dx', '8')
+                .text(max);
+
+            var maxValSP = prices[1].values[maxValIndex].closedPrices;
+            var maxTipSP =  chartGroup
+                .append('g')
+                .attr('class', 'maxTipSP');
+            maxTipSP
+                .append("circle") // Uses the enter().append() method
+                .attr("class", "dot") // Assign a class for styling
+                .attr("cx", function() { return x(dateForMaxVal); })
+                .attr("cy", function(){ return y(maxValSP);})
+                .attr("r", 4);
+            maxTipSP
+                .append("text")
+                .attr("class", "valueText")
+                .attr('text-anchor', 'start')
+                .attr("transform", "translate("+(x(dateForMaxVal)-120)+","+y(maxValSP)+")")
+                .attr('dy', '.32em')
+                .attr('dx', '8')
+                .text(maxValSP);
+
+            // chartGroup
+            //     .selectAll(".dot")
+            //     .data(pointSeries(prices, 0)).enter()
+            //     .append("circle") // Uses the enter().append() method
+            //     .attr("class", "dot") // Assign a class for styling
+            //     .attr("cx", function(d) { return x(d.date); })
+            //     .attr("cy", function(d){ return y(d.closedPrices);})
+            //     .attr("r", 0.4);
+
+            //Draw the Legend
+            var legendWrap=chartGroup
+                .append('g')
+                .attr('class', 'legendWrap')
+                .attr('transform', 'translate(' + (width - 120) + ',' + (height + 40) +')');
+            var singleLegend=legendWrap
+                    .selectAll(".legend")
+                    .data(prices).enter()
+                    .append("g")
+                    .attr('class', 'legend')
+                    .attr('transform', function (d, i) {
+                        return 'translate(' + (i*50) + ',' + 0 +')';
+                    });
+            singleLegend
+                .append("circle")
+                .attr("class", "legendColorHint")
+                .attr("r", 5)
+                .style('strike', function (d, i) {
+                    return colorTable[i];
+                })
+                .style('fill', function (d, i) {
+                    return colorTable[i];
+                });
+            singleLegend
+                .append("text")
+                .attr("class", "legendText")
+                .attr('text-anchor', 'start')
+                .attr('dy', '.32em')
+                .attr('dx', '8')
+                .text(function (d) {
+                    return d.colName;
+                });
+
+            //x-axis and its unit
+            chartGroup.append("g")
+                .attr("class","axis x")
+                .attr("transform","translate(0,"+height+")")
+                .call(xAxis);
+            chartGroup
+                .append("text")
+                .attr("class","axisLabel")
+                .attr('text-anchor', 'middle')
+                //.attr('x', x.range()[1] / 2)
+                // .attr('y', height + margin.bottom - 20)
+                .attr('transform', 'translate(' + (width/2) + ',' + (height + margin.bottom - 20) +')')
+                .text("Time(Year)");
+            //y-axis and its unit
+            chartGroup.append("g")
+                .attr("class","axis y")
+                .call(yAxis);
+            chartGroup
+                .append('text').attr('class', 'axisLabel')
+                .attr('transform', 'rotate(-90)')
+                .attr('text-anchor', 'middle')
+                .attr('y', 20 - margin.left)
+                .attr('x', -y.range()[0] / 2)
+                .text("Daily Closing Price(1000$)");
+        });
+
+
+
+
+
+</script>
+</body>
+</html>
